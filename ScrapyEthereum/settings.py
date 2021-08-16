@@ -52,7 +52,7 @@ DEFAULT_REQUEST_HEADERS = {
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 DOWNLOADER_MIDDLEWARES = {
-    'ScrapyEthereum.middlewares.ScrapyethereumDownloaderMiddleware': 543,
+    # 'ScrapyEthereum.middlewares.ScrapyethereumDownloaderMiddleware': 543,
 }
 
 # Enable or disable extensions
