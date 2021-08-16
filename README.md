@@ -1,5 +1,5 @@
 # ethersan-data-scrapy
-通过scrapy爬取etherscan主网的以太坊数据，包括区块&amp;各种类型交易
+通过scrapy爬取etherscan主网的以太坊数据，包括区块&各种类型交易
 
 # 思路
 官方API获取交易，或内部交易列表，必须指定相关账户，且一次性获取交易数有限，因此不使用官方API <br>
