@@ -4,7 +4,7 @@ from ..items import Tx_target_keys
 
 start_blocknum = 13035060
 default_page_size = 50 # 区块中每页默认交易数
-pgnum = 1
+
  
 class GetTxSpider(scrapy.Spider):
     name = 'get_tx'
@@ -12,12 +12,13 @@ class GetTxSpider(scrapy.Spider):
     first_url = 'https://etherscan.io/txs?block='
     root_txurl = 'https://etherscan.io/tx/'
     # start_urls = ['http://etherscan.io/txs?block=' + str(start_blocknum)]
-    start_urls = ['https://etherscan.io/txs?block=13008648&p=1']
+    start_urls = ['https://etherscan.io/txs?block=13035041&p=1']
+
 
 
     # 调试 交易页面的简单接口
     # def start_requests(self):
-    #     url = 'https://etherscan.io/tx/0xf2afcd90cdc99e37ebfb5e4e49c72f5dc9d884a33d20ab83194042518557dfa8'
+    #     url = 'https://etherscan.io/tx/0xa106168f5b6b7157aa5f3791d0bf55f924c791b1806dc637838148d305975c0e'
     #     yield scrapy.Request(url=url, callback=self.parse_tx)
 
     def start_requests(self):
@@ -30,39 +31,33 @@ class GetTxSpider(scrapy.Spider):
 
     # 第一个parse 获取一个block内每一页的交易列表
     def parse(self, response):
-        global pgnum
         current_url = response.url
         cur_pgnum = self.get_pgnum(current_url)
-        print('########', current_url, ' ', cur_pgnum)
-        print('####### total page num is: ', pgnum)
         mainrow = response.xpath('//div[@id="ContentPlaceHolder1_mainrow"]')[0]
         tot_tx_str = mainrow.xpath('.//div[@id="ContentPlaceHolder1_topPageDiv"]/p/span/text()').extract()[1].strip()
         tot_tx = int(tot_tx_str.split()[3])
         if tot_tx > 0:
-            # 第一次访问，计算总页数
-            if cur_pgnum == 1:
-                pgnum = tot_tx // default_page_size
-                if tot_tx % default_page_size != 0:
-                    pgnum += 1
-
             table = mainrow.xpath('.//div[contains(@class, "table-responsive")]/table/tbody')[0]
             trs = table.xpath('./tr')
             # 遍历每一行 具体的交易hash在 第二列
             txhash_list = []
-            for tr in trs:
-                td = tr.xpath('./td')[1]
-                if len(td.xpath('./span[@class="text-danger"]')) > 0:
-                    continue
-                txhash = td.xpath('./span[contains(@class, "hash-tag")]/a/text()').extract()[0].strip()
-                txhash_list.append(txhash)
-            print('page %d' % (cur_pgnum), 'txhash_list size is: ', len(txhash_list))
+            # 判断当前页是否还有数据
+            if len(trs[0].xpath('./td')) > 1:
+                for tr in trs:
+                    td = tr.xpath('./td')[1]
+                    if len(td.xpath('./span[@class="text-danger"]')) > 0:
+                        continue
+                    txhash = td.xpath('./span[contains(@class, "hash-tag")]/a/text()').extract()[0].strip()
+                    txhash_list.append(txhash)
+                print('current pagenum: ', cur_pgnum, 'txhash_list size is: ', len(txhash_list))
 
             # 这里 将tx hash列表提取出来，通过 request(url, callback) 回调处理函数                
             for txhash in txhash_list:
                 txurl = self.root_txurl + txhash
                 yield scrapy.Request(url=txurl, callback=self.parse_tx)
-
-            if cur_pgnum < pgnum:
+            
+            # 如果当前页面数据正好有 default_page_size，说明可能仍有下一页数据
+            if len(txhash_list) >= default_page_size:
                 yield scrapy.Request(url=self.get_newurl(current_url, cur_pgnum + 1), callback=self.parse)
 
         # 可以什么都不返回
@@ -242,7 +237,12 @@ class GetTxSpider(scrapy.Spider):
     # 处理 token tx，返回token tx列表
     # row 代表当前 token tx的行标签
     def handle_token_transfer(self, row):
-        ul = row.xpath('./div[2]/ul')[0]
+        # 有时候交易很多，采用滑动查看的格式，这个时候，ul == NULL
+        uls = row.xpath('./div[2]/ul')
+        if len(uls) == 0:
+            # 滑动格式
+            uls = row.xpath('.//ul[@id="wrapperContent"]')
+        ul = uls[0]
         lis = ul.xpath('./li')
         token_tx_list = []
         for li in lis:
