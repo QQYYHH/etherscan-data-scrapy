@@ -62,6 +62,11 @@ class TxItem(scrapy.Item):
     # Token 相关
     token_address = scrapy.Field() # token的官方地址 etherscan.io/token/address
     token_name = scrapy.Field() # token币的名字
+    
+    # 如果token transfer 交易的是NFT，那么该字段代表NFT代号
+    # 可以在 https://etherscan.io/token/tk_address?a=NFTID 地址访问NFT具体数据
+    ntf = scrapy.Field() 
+
 
     value = scrapy.Field()
     tx_fee = scrapy.Field()
