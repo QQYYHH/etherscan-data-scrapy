@@ -2,7 +2,7 @@ import scrapy
 from ..items import TxItem
 from ..items import Tx_target_keys
 
-start_blocknum = 13008648 
+start_blocknum = 13035060
 default_page_size = 50 # 区块中每页默认交易数
 pgnum = 1
  
@@ -17,16 +17,16 @@ class GetTxSpider(scrapy.Spider):
 
     # 调试 交易页面的简单接口
     # def start_requests(self):
-    #     url = 'https://etherscan.io/tx/0x1afe7cb0fc337b16fb14f74ea05d2702283b699efbf522f2c3a82c3baf854ef8'
+    #     url = 'https://etherscan.io/tx/0xf2afcd90cdc99e37ebfb5e4e49c72f5dc9d884a33d20ab83194042518557dfa8'
     #     yield scrapy.Request(url=url, callback=self.parse_tx)
 
-    # def start_requests(self):
-    #     urls = []
-    #     for i in range(start_blocknum):
-    #         urls.append(self.first_url + str(start_blocknum - i) + '&p=1')
-    #     
-    #     for url in urls:
-    #         yield scrapy.Request(url=url, callback=self.parse)
+    def start_requests(self):
+        urls = []
+        for i in range(start_blocknum):
+            urls.append(self.first_url + str(start_blocknum - i) + '&p=1')
+        
+        for url in urls:
+            yield scrapy.Request(url=url, callback=self.parse)
 
     # 第一个parse 获取一个block内每一页的交易列表
     def parse(self, response):
@@ -249,14 +249,35 @@ class GetTxSpider(scrapy.Spider):
             token_tx = TxItem()
             token_tx['id'] = 3
             spans = li.xpath('./div[1]/span')
-            # 从超链接中提取 收发方的账户地址，同样可以使用函数 get_pgnum
+            # 从超链接中提取 收发方的账户地址
             token_tx['fm'] = self.get_token_account(spans[1].xpath('./a/@href').extract()[0])
             token_tx['to'] = self.get_token_account(spans[3].xpath('./a/@href').extract()[0])
-            token_tx['value'] = spans[5].xpath('.//text()').extract()[0]
-            # 填充 token币的官方地址 & 名字
-            a = li.xpath('./div/a')[0]
-            token_tx['token_address'] = a.xpath('./@href').extract()[0][len('/token/'):]
-            token_tx['token_name'] = a.xpath('./text()').extract()[0].strip()
+            # token transfer 有两种情况，一种是交易常规的token
+            # 另一种是交易NFT，通常NFT的数量唯一
+            if len(spans) <= 5:
+                # 交易NFT
+                tmp = spans[-1].xpath('./text()').extract()
+                ntf_name = ""
+                for s in tmp:
+                    s_after = s.strip()
+                    if s_after is not '':
+                        if s_after[-1] == '[':
+                            s_after = s_after[:-1]
+                        if s_after not in ['[', ']']:
+                            ntf_name += s_after
+                ntf_name += spans[-1].xpath('./a[1]/text()').extract()[0]
+                token_tx['ntf'] = ntf_name
+                a = spans[-1].xpath('./a')[1]
+                token_tx['token_address'] = a.xpath('./@href').extract()[0][len('/token/'):]
+                token_tx['token_name'] = a.xpath('./text()').extract()[0].strip()
+                pass
+            else:
+                token_tx['value'] = spans[5].xpath('.//text()').extract()[0]
+                # 填充 token币的官方地址 & 名字
+                a = li.xpath('./div/a')[0]
+                token_tx['token_address'] = a.xpath('./@href').extract()[0][len('/token/'):]
+                token_tx['token_name'] = a.xpath('./text()').extract()[0].strip()
+                
             token_tx_list.append(token_tx)
         return token_tx_list
 
