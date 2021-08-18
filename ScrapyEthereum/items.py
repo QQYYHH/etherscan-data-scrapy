@@ -56,6 +56,8 @@ class TxItem(scrapy.Item):
     fm = scrapy.Field() # 如果是token转账，代表token发送地址
     to = scrapy.Field() # 如果是token转账，代表token接收地址
 
+    invoke_type = scrapy.Field() # interal tx 的调用类型(call | suiside | delegate_call)
+
     # 合约执行过程中的一些event, 这些event可以通过 Token transferred 完全追踪
     # 所以这个属性是可以去掉的
     # tx_action = scrapy.Field()  'Transaction Action:': 'tx_action'
