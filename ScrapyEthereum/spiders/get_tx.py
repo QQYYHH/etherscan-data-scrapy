@@ -12,13 +12,13 @@ class GetTxSpider(scrapy.Spider):
     first_url = 'https://etherscan.io/txs?block='
     root_txurl = 'https://etherscan.io/tx/'
     # start_urls = ['http://etherscan.io/txs?block=' + str(start_blocknum)]
-    start_urls = ['https://etherscan.io/txs?block=13035041&p=1']
+    start_urls = ['https://etherscan.io/txs?block=13034952&p=1']
 
 
 
     # 调试 交易页面的简单接口
     # def start_requests(self):
-    #     url = 'https://etherscan.io/tx/0xa106168f5b6b7157aa5f3791d0bf55f924c791b1806dc637838148d305975c0e'
+    #     url = 'https://etherscan.io/tx/0x84191e3080f0af7825663849b0b621d0d2da86f82547dbda63bcb10e5225b22c/advanced'
     #     yield scrapy.Request(url=url, callback=self.parse_tx)
 
     def start_requests(self):
@@ -35,7 +35,8 @@ class GetTxSpider(scrapy.Spider):
         cur_pgnum = self.get_pgnum(current_url)
         mainrow = response.xpath('//div[@id="ContentPlaceHolder1_mainrow"]')[0]
         tot_tx_str = mainrow.xpath('.//div[@id="ContentPlaceHolder1_topPageDiv"]/p/span/text()').extract()[1].strip()
-        tot_tx = int(tot_tx_str.split()[3])
+        tot_tx = self.get_tx_totalnum(tot_tx_str.split()[3])
+        print(current_url, 'total tx num:', tot_tx)
         if tot_tx > 0:
             table = mainrow.xpath('.//div[contains(@class, "table-responsive")]/table/tbody')[0]
             trs = table.xpath('./tr')
@@ -53,7 +54,7 @@ class GetTxSpider(scrapy.Spider):
 
             # 这里 将tx hash列表提取出来，通过 request(url, callback) 回调处理函数                
             for txhash in txhash_list:
-                txurl = self.root_txurl + txhash
+                txurl = self.root_txurl + txhash + '/advanced' # advanced 为了获取全部的interal tx列表
                 yield scrapy.Request(url=txurl, callback=self.parse_tx)
             
             # 如果当前页面数据正好有 default_page_size，说明可能仍有下一页数据
@@ -135,7 +136,12 @@ class GetTxSpider(scrapy.Spider):
         # 最后提交 txitem
         yield txitem
 
-        
+    # 将tx 总数转换为 int
+    # 当tx总数过多，比如 1,067 不能直接强转
+    def get_tx_totalnum(self, tot_tx_str):
+        tot_tx_str = tot_tx_str.replace(',', '')
+        return int(tot_tx_str)
+
     # 从url 中获取 页数
     # https://etherscan.io/txs?block=13008648&p=1 也就是获取p
     def get_pgnum(self, url):
@@ -204,34 +210,25 @@ class GetTxSpider(scrapy.Spider):
         txitem['to'] = self.get_label_text(body.xpath('./a[@id="contractCopy"]')[0])
         interal_tx_list = []
         # 说明有 interal tx
+        # 则切换到 Internal txn 选项卡提取所有internal tx
         if len(body.xpath('./ul')) > 0:
-            lis = body.xpath('./ul/li')
-            index = 0
-            while index <= len(str_list) and str_list[index] != 'TRANSFER':
-                index += 1
-            for li in lis:
-                index += 1 # 'TRANSFER'的下一位
+            internal_tx_div = row.xpath('../../../div[2]/div[2]/div[2]')[0]
+            trs = internal_tx_div.xpath('./table/tbody/tr')
+            for tr in trs:
                 internal_tx = TxItem()
-                internal_tx['id'] = 2
-                lidiv = li.xpath('./div')[0]
-                # 先提取 内部交易转账金额
-                if str_list[index + 1] == '.':
-                    val = str_list[index] + '.' + str_list[index + 2]
-                    index += 3
-                else:
-                    val = str_list[index]
-                    index += 1
+                tds = tr.xpath('./td')
+                internal_tx['invoke_type'] = self.get_label_text(tds[0])
+                internal_tx['fm'] = self.get_label_text(tds[1].xpath('./span/a')[0])
+                internal_tx['to'] = self.get_label_text(tds[3].xpath('./span/a')[0])
+                tmp = tds[4].xpath('.//text()').extract()
+                val = ''
+                for s in tmp:
+                    s_after = s.strip()
+                    if s_after != '':
+                        val += s_after
                 internal_tx['value'] = val
-                hrefs = lidiv.xpath('./a/@href').extract()
-                # 然后提取 from & to
-                address_offset = len('/address/')
-                internal_tx['fm'] = hrefs[0][address_offset:]
-                internal_tx['to'] = hrefs[1][address_offset:]
+                internal_tx['gas_limit'] = self.get_label_text(tds[5])
                 interal_tx_list.append(internal_tx)
-                # 移动 index，为获取下一个 val作准备
-                while index < len(str_list) and str_list[index] != 'TRANSFER':
-                    index += 1
-
         return interal_tx_list
 
     # 处理 token tx，返回token tx列表
