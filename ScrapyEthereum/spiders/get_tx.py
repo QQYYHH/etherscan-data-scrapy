@@ -53,13 +53,13 @@ class GetTxSpider(scrapy.Spider):
                 print('current pagenum: ', cur_pgnum, 'txhash_list size is: ', len(txhash_list))
 
             # 这里 将tx hash列表提取出来，通过 request(url, callback) 回调处理函数                
-            # for txhash in txhash_list:
-            #     txurl = self.root_txurl + txhash + '/advanced' # advanced 为了获取全部的interal tx列表
-            #     yield scrapy.Request(url=txurl, callback=self.parse_tx)
+            for txhash in txhash_list:
+                txurl = self.root_txurl + txhash + '/advanced' # advanced 为了获取全部的interal tx列表
+                yield scrapy.Request(url=txurl, callback=self.parse_tx)
             
             # 如果当前页面数据正好有 default_page_size，说明可能仍有下一页数据
-            # if len(txhash_list) >= default_page_size:
-            #     yield scrapy.Request(url=self.get_newurl(current_url, cur_pgnum + 1), callback=self.parse)
+            if len(txhash_list) >= default_page_size:
+                yield scrapy.Request(url=self.get_newurl(current_url, cur_pgnum + 1), callback=self.parse)
 
         # 可以什么都不返回
         
