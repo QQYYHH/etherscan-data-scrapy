@@ -12,13 +12,13 @@ class GetTxSpider(scrapy.Spider):
     first_url = 'https://etherscan.io/txs?block='
     root_txurl = 'https://etherscan.io/tx/'
     # start_urls = ['http://etherscan.io/txs?block=' + str(start_blocknum)]
-    start_urls = ['https://etherscan.io/txs?block=13034952&p=1']
+    start_urls = ['https://etherscan.io/txs?block=13035028&p=1']
 
 
 
     # 调试 交易页面的简单接口
     # def start_requests(self):
-    #     url = 'https://etherscan.io/tx/0x84191e3080f0af7825663849b0b621d0d2da86f82547dbda63bcb10e5225b22c/advanced'
+    #     url = 'https://etherscan.io/tx/0x70a0d0819acc4d775ec8589a1409a64baa0c230b4b8fdd476dedea862198f5e9/advanced'
     #     yield scrapy.Request(url=url, callback=self.parse_tx)
 
     def start_requests(self):
@@ -53,13 +53,13 @@ class GetTxSpider(scrapy.Spider):
                 print('current pagenum: ', cur_pgnum, 'txhash_list size is: ', len(txhash_list))
 
             # 这里 将tx hash列表提取出来，通过 request(url, callback) 回调处理函数                
-            for txhash in txhash_list:
-                txurl = self.root_txurl + txhash + '/advanced' # advanced 为了获取全部的interal tx列表
-                yield scrapy.Request(url=txurl, callback=self.parse_tx)
+            # for txhash in txhash_list:
+            #     txurl = self.root_txurl + txhash + '/advanced' # advanced 为了获取全部的interal tx列表
+            #     yield scrapy.Request(url=txurl, callback=self.parse_tx)
             
             # 如果当前页面数据正好有 default_page_size，说明可能仍有下一页数据
-            if len(txhash_list) >= default_page_size:
-                yield scrapy.Request(url=self.get_newurl(current_url, cur_pgnum + 1), callback=self.parse)
+            # if len(txhash_list) >= default_page_size:
+            #     yield scrapy.Request(url=self.get_newurl(current_url, cur_pgnum + 1), callback=self.parse)
 
         # 可以什么都不返回
         
@@ -194,6 +194,17 @@ class GetTxSpider(scrapy.Spider):
                 return s_after
         return ''
 
+    # 递归获取某个标签下所有的文本信息
+    # @ret text list
+    def get_recursive_label_text(self, label):
+        str_list = label.xpath('.//text()').extract()
+        ans = []
+        for s in str_list:
+            s_after = s.strip()
+            if s_after != '':
+                ans.append(s_after)
+        return ans
+
 
     # 填充txitem中的 to字段，同时如果有interal tx，则返回interal tx列表
     # row 代表当前 html中to对应的div标签
@@ -217,9 +228,9 @@ class GetTxSpider(scrapy.Spider):
             for tr in trs:
                 internal_tx = TxItem()
                 tds = tr.xpath('./td')
-                internal_tx['invoke_type'] = self.get_label_text(tds[0])
-                internal_tx['fm'] = self.get_label_text(tds[1].xpath('./span/a')[0])
-                internal_tx['to'] = self.get_label_text(tds[3].xpath('./span/a')[0])
+                internal_tx['invoke_type'] = self.get_recursive_label_text(tds[0])[0]
+                internal_tx['fm'] = self.get_recursive_label_text(tds[1])[0]
+                internal_tx['to'] = self.get_recursive_label_text(tds[3])[0]
                 tmp = tds[4].xpath('.//text()').extract()
                 val = ''
                 for s in tmp:
